@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TransitSync - Smart Intermediate Train Route Finder</title>
+  <meta name="description" content="TransitSync: Smart intermediate train route finder. Search by desired arrival time and transfer gap preferences.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('transitsync_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch(e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Header Navigation -->
+    <header class="header">
+      <a href="#" class="brand" id="brand-logo">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text-block">
+          <div class="brand-title">Transit<span>Sync</span></div>
+          <div class="brand-tagline">Smart intermediate train route finder</div>
+        </div>
+      </a>
+
+      <div class="header-actions">
+        <!-- Live API Status Badge -->
+        <button type="button" class="api-badge" id="api-status-badge" title="Configure RapidAPI / RailRadar">
+          <span class="status-dot" id="api-status-dot"></span>
+          <span id="api-status-text">Engine Active</span>
+        </button>
+
+        <!-- Theme Toggle Switch -->
+        <button type="button" class="theme-toggle-btn" id="btn-theme-toggle" title="Toggle Theme (Dark / Light)" aria-label="Toggle Theme">
+          <span class="theme-icon" id="theme-toggle-icon">🌙</span>
+          <span class="theme-label" id="theme-toggle-label">Dark</span>
+        </button>
+
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-how-it-works">
+          Guide
+        </button>
+
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-api-settings">
+          API
+        </button>
+      </div>
+    </header>
+
+    <!-- Search Console -->
+    <section class="search-panel">
+      <form id="search-form">
+        <div class="search-grid">
+          
+          <!-- Boarding Station -->
+          <div class="input-group">
+            <label class="input-label" for="from-station-input">From</label>
+            <input 
+              type="text" 
+              id="from-station-input" 
+              class="input-field" 
+              placeholder="e.g. BSB" 
+              autocomplete="off" 
+              value="BSB"
+              required
+            />
+            <div class="station-dropdown" id="from-station-dropdown"></div>
+          </div>
+
+          <!-- Station Swap Button -->
+          <button type="button" class="btn-swap-stations" id="btn-swap-stations" title="Swap From & To Stations" aria-label="Swap Stations">
+            ⇄
+          </button>
+
+          <!-- Destination Station -->
+          <div class="input-group">
+            <label class="input-label" for="to-station-input">To</label>
+            <input 
+              type="text" 
+              id="to-station-input" 
+              class="input-field" 
+              placeholder="e.g. HWH" 
+              autocomplete="off" 
+              value="HWH"
+              required
+            />
+            <div class="station-dropdown" id="to-station-dropdown"></div>
+          </div>
+
+          <!-- Journey Date -->
+          <div class="input-group">
+            <label class="input-label" for="journey-date-input">Date</label>
+            <input 
+              type="date" 
+              id="journey-date-input" 
+              class="input-field" 
+              required
+            />
+          </div>
+
+          <!-- Target Arrival Time -->
+          <div class="input-group">
+            <label class="input-label" for="target-arrival-time">Arrive By</label>
+            <input 
+              type="time" 
+              id="target-arrival-time" 
+              class="input-field input-field-time" 
+              value="09:30" 
+              required
+            />
+          </div>
+
+          <!-- Layover Buffer / Direct Only Option -->
+          <div class="input-group">
+            <label class="input-label" for="min-layover-select">Layover Option</label>
+            <select id="min-layover-select" class="input-field">
+              <option value="0">No Layover (Direct Only)</option>
+              <option value="30">Min 30m Layover</option>
+              <option value="45" selected>Min 45m Layover</option>
+              <option value="60">Min 60m Layover</option>
+              <option value="90">Min 90m Layover</option>
+            </select>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="input-group submit-group">
+            <button type="submit" class="btn btn-primary btn-search" id="btn-find-routes">
+              <span>Find Routes</span>
+              <span class="btn-arrow">➔</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Filter Sub-Bar -->
+        <div class="advanced-filters">
+          <!-- Target Arrival Shortcuts -->
+          <div class="filter-group">
+            <span class="filter-label">Arrival:</span>
+            <div class="segmented-control" id="target-presets">
+              <button type="button" class="segmented-btn" data-time="08:00">08:00 AM</button>
+              <button type="button" class="segmented-btn active" data-time="09:30">09:30 AM</button>
+              <button type="button" class="segmented-btn" data-time="12:00">12:00 PM</button>
+              <button type="button" class="segmented-btn" data-time="17:00">05:00 PM</button>
+              <button type="button" class="segmented-btn" data-time="21:30">09:30 PM</button>
+            </div>
+          </div>
+
+          <!-- Class Filter -->
+          <div class="filter-group">
+            <span class="filter-label">Class:</span>
+            <div class="segmented-control" id="class-filter">
+              <button type="button" class="segmented-btn" data-class="1A">1A</button>
+              <button type="button" class="segmented-btn" data-class="2A">2A</button>
+              <button type="button" class="segmented-btn active" data-class="3A">3A</button>
+              <button type="button" class="segmented-btn" data-class="CC">CC</button>
+              <button type="button" class="segmented-btn" data-class="SL">SL</button>
+            </div>
+          </div>
+
+          <!-- Route Type -->
+          <div class="filter-group">
+            <span class="filter-label">Type:</span>
+            <div class="segmented-control" id="route-type-filter">
+              <button type="button" class="segmented-btn active" data-type="all">All</button>
+              <button type="button" class="segmented-btn" data-type="direct">Direct</button>
+              <button type="button" class="segmented-btn" data-type="connecting">Connecting</button>
+            </div>
+          </div>
+
+          <!-- Max Gap Hidden/Fallback selector -->
+          <input type="hidden" id="max-layover-select" value="240" />
+        </div>
+
+      </form>
+    </section>
+
+    <!-- Results Section -->
+    <main class="results-section">
+      <div class="results-header" id="results-header" style="display: none;">
+        <div class="results-summary">
+          <div class="results-count" id="results-count-text">0 Routes Found</div>
+          <div class="results-subtext" id="results-subtext"></div>
+        </div>
+
+        <!-- Sorting Tabs -->
+        <div class="sort-tabs" id="sort-tabs">
+          <button type="button" class="sort-tab active" data-sort="arrival_match" id="sort-arrival">
+            Best Arrival
+          </button>
+          <button type="button" class="sort-tab" data-sort="fastest" id="sort-fastest">
+            Fastest
+          </button>
+          <button type="button" class="sort-tab" data-sort="safety" id="sort-safety">
+            Safest Buffer
+          </button>
+          <button type="button" class="sort-tab" data-sort="fare" id="sort-fare">
+            Lowest Fare
+          </button>
+        </div>
+      </div>
+
+      <!-- Route Cards Stream -->
+      <div class="routes-list" id="routes-container">
+        <div class="empty-state" id="initial-state">
+          <div class="empty-icon">⚡</div>
+          <h3>Ready to Search</h3>
+          <p>Specify boarding, destination, and your target arrival time.</p>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODAL: API Settings -->
+  <div class="modal-overlay" id="modal-api-settings">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">API Settings</div>
+        <button class="modal-close" id="btn-close-api-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label class="input-label" for="api-provider-select">Provider</label>
+          <select id="api-provider-select" class="input-field">
+            <option value="railradar">RailRadar RapidAPI (railradar-indian-railways.p.rapidapi.com)</option>
+            <option value="irctc1">IRCTC1 RapidAPI (irctc1.p.rapidapi.com)</option>
+            <option value="custom">Custom RapidAPI</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="api-key-input">RapidAPI Key</label>
+          <input type="password" id="api-key-input" class="input-field" placeholder="Enter RapidAPI Key" />
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="api-host-input">RapidAPI Host</label>
+          <input type="text" id="api-host-input" class="input-field" value="railradar-indian-railways.p.rapidapi.com" />
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button class="btn btn-primary btn-sm" id="btn-test-api-connection">
+            Ping Test
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-save-api-config">
+            Save
+          </button>
+          <span id="api-ping-result" style="font-size: 11.5px; font-family: var(--font-mono); color: var(--accent-primary);"></span>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label class="input-label" style="margin: 0;">API Stream</label>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-api-logs" style="font-size: 10px; padding: 2px 5px;">Clear</button>
+          </div>
+          <div class="api-logs-terminal" id="api-logs-terminal"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Station Hub Guide -->
+  <div class="modal-overlay" id="modal-hub-guide">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="hub-modal-title">Hub Guide</div>
+        <button class="modal-close" id="btn-close-hub-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="hub-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: How It Works -->
+  <div class="modal-overlay" id="modal-how-it-works">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">How TransitSync Works</div>
+        <button class="modal-close" id="btn-close-how-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+          Unlike traditional portals that only list direct trains by departure date, <strong>TransitSync</strong> solves the reverse route: you specify your <strong>target arrival deadline</strong> and layover tolerance. TransitSync computes direct trains and multi-leg connecting routes ($A \to C \to B$) with intermediate transfer safety and combined fares.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="railradar-api.js"></script>
+  <script src="router-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
